@@ -6,7 +6,6 @@ author: Punyapat Areerob (@punyapat)
 
 """
 import matplotlib.pyplot as plt
-import cvxpy
 import math
 import numpy as np
 import sys
@@ -129,7 +128,7 @@ def calc_nearest_index(state, cx, cy, cyaw, pind):
     angle = pi_2_pi(cyaw[ind] - math.atan2(dyl, dxl))
     if angle < 0:
         mind *= -1
-
+    if(pind == 0): ind = 1
     return ind, mind
 def smooth_yaw(yaw):
 
@@ -151,7 +150,7 @@ def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
     ncourse = len(cx)
 
     ind, _ = calc_nearest_index(state, cx, cy, cyaw, pind)
-
+    
     if pind >= ind:
         ind = pind
 
@@ -322,15 +321,16 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
     
     loop = 0
     error_ILC = []
-    Nloop = 5
+    Nloop = 2
     RC_loop = len(cx) * Nloop
-    ref_x_cx = np.copy(np.array(cx))
-    ref_y_cy = np.copy(np.array(cy))
-    ref_x_cx  = np.concatenate((ref_x_cx, np.zeros(RC_loop)), axis=None)
-    ref_y_cy  = np.concatenate((ref_y_cy, np.zeros(RC_loop)), axis=None)
+    ref_x_cx = []
+    ref_y_cy = []
+    for i in range(Nloop+1):
+        ref_x_cx  = np.concatenate((ref_x_cx, np.copy(np.array(cx))), axis=None)
+        ref_y_cy  = np.concatenate((ref_y_cy, np.copy(np.array(cy))), axis=None)
     error_control_input_x = np.zeros(len(cx)+RC_loop)
     error_control_input_y = np.zeros(len(cx)+RC_loop)
-    KRC = 0
+    KRC = 0.1
         # ref_x_new = cx[i+((n)*1771)] + (KRC*error_control_input_x[i+((n)*1771)+1])
         # ref_y_new = cy[i+((n)*1771)] + (KRC*error_control_input_y[i+((n)*1771)+1])
         # irst_half = ref_x_cx[(last*loop):last ]
@@ -339,8 +339,12 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
     while loop < Nloop:
         last =target_ind
         sup = len(cx)
-        ref_x_x = ref_x_cx[(sup*loop)+1:(sup*loop)+sup]
-        ref_y_y =  ref_y_cy[(sup*loop)+1:(sup*loop)+sup]
+        if(loop == 0):
+            ref_x_x = ref_x_cx[(sup*loop):(sup*loop)+sup]
+            ref_y_y =  ref_y_cy[(sup*loop):(sup*loop)+sup]
+        else:
+            ref_x_x = ref_x_cx[(sup*loop):(sup*loop)+sup]
+            ref_y_y =  ref_y_cy[(sup*loop):(sup*loop)+sup]
         xref, target_ind, dref = calc_ref_trajectory(
             state, ref_x_x ,ref_y_y , cyaw, ck, sp, dl, target_ind)
         x0 = [state.x, state.y, state.v, state.yaw]  # current state
@@ -356,17 +360,21 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
         d.append(di/3.14*180)
         a.append(ai)
         error.append(cte)
+        
         if(last != target_ind):
+            # print(len(cx),(sup*(loop+1))+target_ind-1)
+            ref_x_cx[(sup*(loop+1))+target_ind-1]  = ref_x_x[target_ind-1] + (KRC*cte)
+            ref_y_cy[(sup*(loop+1))+target_ind-1]  = ref_y_y[target_ind-1] + (KRC*cte)
             error_ILC.append(error)
-            print(len(cx),last,(sup*loop)+last)
+            # print(len(cx),last,(sup*(loop+1))+last)
         if check_goal(state, goal, target_ind, len(cx)):
+            # plt.close("all")
+            # plt.plot(ref_x_x,ref_y_y, "-r", label="spline")
+            # print(ref_x_x[len(ref_x_x)-1],loop)
+            #plt.pause(0.01)
             loop += 1
             target_ind = 0
-            xref, target_ind, dref = calc_ref_trajectory(
-            state, ref_x_x ,ref_y_y , cyaw, ck, sp, dl, target_ind)
-            print(target_ind)
             print("Goal")
-            # break
         if show_animation:  # pragma: no cover
             plt.cla()
             # for stopping simulation with the esc key.
