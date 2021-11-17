@@ -321,7 +321,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
     
     loop = 0
     error_ILC = []
-    Nloop = 2
+    Nloop = 5
     RC_loop = len(cx) * Nloop
     ref_x_cx = []
     ref_y_cy = []
@@ -330,12 +330,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
         ref_y_cy  = np.concatenate((ref_y_cy, np.copy(np.array(cy))), axis=None)
     error_control_input_x = np.zeros(len(cx)+RC_loop)
     error_control_input_y = np.zeros(len(cx)+RC_loop)
-    KRC = 0.1
-        # ref_x_new = cx[i+((n)*1771)] + (KRC*error_control_input_x[i+((n)*1771)+1])
-        # ref_y_new = cy[i+((n)*1771)] + (KRC*error_control_input_y[i+((n)*1771)+1])
-        # irst_half = ref_x_cx[(last*loop):last ]
-        #        
-
+    KRC = 0
     while loop < Nloop:
         last =target_ind
         sup = len(cx)
@@ -345,6 +340,7 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
         else:
             ref_x_x = ref_x_cx[(sup*loop):(sup*loop)+sup]
             ref_y_y =  ref_y_cy[(sup*loop):(sup*loop)+sup]
+        
         xref, target_ind, dref = calc_ref_trajectory(
             state, ref_x_x ,ref_y_y , cyaw, ck, sp, dl, target_ind)
         x0 = [state.x, state.y, state.v, state.yaw]  # current state
@@ -360,7 +356,6 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
         d.append(di/3.14*180)
         a.append(ai)
         error.append(cte)
-        
         if(last != target_ind):
             # print(len(cx),(sup*(loop+1))+target_ind-1)
             ref_x_cx[(sup*(loop+1))+target_ind-1]  = ref_x_x[target_ind-1] + (KRC*cte)
@@ -368,20 +363,16 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
             error_ILC.append(error)
             # print(len(cx),last,(sup*(loop+1))+last)
         if check_goal(state, goal, target_ind, len(cx)):
-            # plt.close("all")
-            # plt.plot(ref_x_x,ref_y_y, "-r", label="spline")
-            # print(ref_x_x[len(ref_x_x)-1],loop)
-            #plt.pause(0.01)
+            # print(np.average(ref_x_x))
+            rmse_val = rmse(np.array(error),np.zeros(len(error)))
+            error = []
             loop += 1
             target_ind = 0
-            print("Goal")
-        if show_animation:  # pragma: no cover
+            print("Goal" , rmse_val)
+        if show_animation:
             plt.cla()
-            # for stopping simulation with the esc key.
             plt.gcf().canvas.mpl_connect('key_release_event',
                     lambda event: [exit(0) if event.key == 'escape' else None])
-            # if ox is not None:
-            #     plt.plot(ox, oy, "xr", label="MPC")
             plt.plot(cx, cy, "-r", label="course")
             plt.plot(x, y, "ob", label="trajectory")
             plt.plot(xref[0, :], xref[1, :], "xk", label="xref")
@@ -392,9 +383,6 @@ def do_simulation(cx, cy, cyaw, ck, sp, dl, initial_state):
             plt.title("Time[s]:" + str(round(time, 2))
                       + ", speed[km/h]:" + str(round(state.v * 3.6, 2)))
             plt.pause(0.0001)
-    
-    rmse_val = rmse(np.array(error),np.zeros(len(error)))
-    # cyaw = smooth_yaw(cyaw)
     return t, x, y, yaw, v, d, a,rmse_val,error_ILC, 
 def main():
     global pid
@@ -453,7 +441,7 @@ def main():
     ax1.plot(t,d, "-b")
     ax1.grid(True)
     ax2.set(xlabel='time(s)', ylabel='steering angle (degree)')
-    # ax2.plot(t,error_debug, "-r")
+    # ax2.plot(range(2),best_err, "-r")
     # ax2.grid(True)
     #ax1.xaxis.set_major_locator(MultipleLocator(5))
     # ax1.yaxis.set_major_locator(MultipleLocator(0.1))
